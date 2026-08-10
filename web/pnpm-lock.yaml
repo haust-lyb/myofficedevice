@@ -23,6 +23,9 @@ importers:
       axios:
         specifier: ^1.19.0
         version: 1.19.0
+      uuid:
+        specifier: ^14.0.1
+        version: 14.0.1
       vue:
         specifier: ^3.5.40
         version: 3.5.41
@@ -512,6 +515,10 @@ packages:
   tinyglobby@0.2.17:
     resolution: {integrity: sha512-wXR/dYpcqKmfWpEdZjiKJOwCNFndD0DMnrW/cYjVGttEkBfVgcLFHoNrlj47mjOVic9yyNu65alsgF4NQyTa2g==}
     engines: {node: '>=12.0.0'}
+
+  uuid@14.0.1:
+    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
+    hasBin: true
 
   vite@8.2.1:
     resolution: {integrity: sha512-EU/eS7BH3XROHh2YnBefjM6DBKA6ZeMZEYQbj7NLWg5wHYlhB8B/Mayd5XsgWq+NFYccDOTemRpdETWR6Ka/lw==}
@@ -1011,6 +1018,8 @@ snapshots:
     dependencies:
       fdir: 6.5.0(picomatch@4.0.5)
       picomatch: 4.0.5
+
+  uuid@14.0.1: {}
 
   vite@8.2.1:
     dependencies:

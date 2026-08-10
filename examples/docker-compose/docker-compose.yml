@@ -1,6 +1,6 @@
 services:
   myofficedevice:
-    image: ${NETDESK_IMAGE:-ghcr.io/haust-lyb/myofficedevice:sha-39a9394}
+    image: "${NETDESK_IMAGE:-ghcr.io/haust-lyb/myofficedevice:sha-39a9394}"
     container_name: myofficedevice
     restart: unless-stopped
 

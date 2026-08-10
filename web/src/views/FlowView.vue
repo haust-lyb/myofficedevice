@@ -5,6 +5,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { useRouter } from 'vue-router'
+import { v4 as uuidv4 } from 'uuid'
 import { currentUser, logout } from '../stores/auth'
 import http from '../api/http'
 import InternetNode from '../components/nodes/InternetNode.vue'
@@ -138,7 +139,11 @@ function onConnect(connection) {
   if (!connection.source || !connection.target || connection.source === connection.target) return
   const duplicate = edges.value.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle && edge.targetHandle === connection.targetHandle)
   if (duplicate) return
-  edges.value.push(normalizeEdge({ ...connection, id: `edge-${crypto.randomUUID()}` }))
+  edges.value.push(normalizeEdge({ ...connection, id: createEdgeId() }))
+}
+
+function createEdgeId() {
+  return `edge-${uuidv4()}`
 }
 
 function onEdgeUpdate({ edge, connection }) {
