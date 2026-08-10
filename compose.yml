@@ -1,0 +1,17 @@
+services:
+  myofficedevice:
+    image: ${NETDESK_IMAGE:-ghcr.io/your-github-name/myofficedevice:latest}
+    container_name: myofficedevice
+    restart: unless-stopped
+    ports:
+      - "${NETDESK_PORT:-8765}:8765"
+    environment:
+      NETDESK_DATA_SECRET: ${NETDESK_DATA_SECRET:?请在 .env 中设置 NETDESK_DATA_SECRET}
+      NETDESK_ADMIN_USERNAME: ${NETDESK_ADMIN_USERNAME:-admin}
+      NETDESK_ADMIN_PASSWORD: ${NETDESK_ADMIN_PASSWORD:?请在 .env 中设置 NETDESK_ADMIN_PASSWORD}
+      NETDESK_ADMIN_DISPLAY_NAME: ${NETDESK_ADMIN_DISPLAY_NAME:-管理员}
+    volumes:
+      - myofficedevice-data:/app/data
+
+volumes:
+  myofficedevice-data:

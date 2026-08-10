@@ -1,0 +1,29 @@
+server:
+  port: 8765
+  servlet:
+    context-path: /mod
+
+spring:
+  application:
+    name: myofficedevice
+  datasource:
+    url: jdbc:sqlite:${NETDESK_DATA_DIR:${user.dir}}/myofficedevice.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.community.dialect.SQLiteDialect
+
+app:
+  data-secret: ${NETDESK_DATA_SECRET:netdesk-development-secret-change-me}
+  admin:
+    username: ${NETDESK_ADMIN_USERNAME:admin}
+    password: ${NETDESK_ADMIN_PASSWORD:admin123}
+    display-name: ${NETDESK_ADMIN_DISPLAY_NAME:管理员}
+  auth:
+    token-hours: 12
