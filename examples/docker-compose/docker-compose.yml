@@ -1,0 +1,18 @@
+services:
+  myofficedevice:
+    image: ${NETDESK_IMAGE:-ghcr.io/haust-lyb/myofficedevice:sha-39a9394}
+    container_name: myofficedevice
+    restart: unless-stopped
+
+    ports:
+      - "${NETDESK_PORT:-8765}:8765"
+
+    environment:
+      NETDESK_DATA_DIR: /app/data
+      NETDESK_DATA_SECRET: "${NETDESK_DATA_SECRET:?请先复制 example.env 为 .env，并设置 NETDESK_DATA_SECRET}"
+      NETDESK_ADMIN_USERNAME: "${NETDESK_ADMIN_USERNAME:-admin}"
+      NETDESK_ADMIN_PASSWORD: "${NETDESK_ADMIN_PASSWORD:?请先复制 example.env 为 .env，并设置 NETDESK_ADMIN_PASSWORD}"
+      NETDESK_ADMIN_DISPLAY_NAME: "${NETDESK_ADMIN_DISPLAY_NAME:-管理员}"
+
+    volumes:
+      - ./data:/app/data
