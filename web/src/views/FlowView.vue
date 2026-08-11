@@ -2,11 +2,12 @@
 import { computed, markRaw, nextTick, onMounted, provide, ref, watch } from 'vue'
 import { VueFlow, MarkerType, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
+import { ControlButton, Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
+import dagre from '@dagrejs/dagre'
 import { useRouter } from 'vue-router'
 import { v4 as uuidv4 } from 'uuid'
-import { currentUser, logout } from '../stores/auth'
+import { canEditTopology, canManageSystem, currentUser, logout } from '../stores/auth'
 import http from '../api/http'
 import InternetNode from '../components/nodes/InternetNode.vue'
 import RouterNode from '../components/nodes/RouterNode.vue'
@@ -15,18 +16,21 @@ import ServerNode from '../components/nodes/ServerNode.vue'
 import VirtualMachineNode from '../components/nodes/VirtualMachineNode.vue'
 import DesktopNode from '../components/nodes/DesktopNode.vue'
 import LaptopNode from '../components/nodes/LaptopNode.vue'
+import logoUrl from '../assets/logo.svg'
+import autoLayoutIcon from '../assets/自动整理布局.svg'
+import { allDevicesIcon, deviceIcons } from '../assets/deviceIcons'
 
 const { project, fitView, updateEdge } = useVueFlow()
 const router = useRouter()
 
 const typeMeta = {
-  internet: { label: '公网', icon: '◎', color: '#8b5cf6' },
-  router: { label: '路由器', icon: '⌁', color: '#2563eb' },
-  switch: { label: '交换机', icon: '⇄', color: '#0891b2' },
-  server: { label: '服务器', icon: '▣', color: '#0f766e' },
-  virtualMachine: { label: '虚拟机', icon: '⬡', color: '#7c3aed' },
-  desktop: { label: '台式机', icon: '▤', color: '#d97706' },
-  laptop: { label: '笔记本', icon: '▱', color: '#db2777' },
+  internet: { label: '公网', icon: deviceIcons.internet, color: '#8b5cf6' },
+  router: { label: '路由器', icon: deviceIcons.router, color: '#2563eb' },
+  switch: { label: '交换机', icon: deviceIcons.switch, color: '#0891b2' },
+  server: { label: '服务器', icon: deviceIcons.server, color: '#0f766e' },
+  virtualMachine: { label: '虚拟机', icon: deviceIcons.virtualMachine, color: '#7c3aed' },
+  desktop: { label: '台式机', icon: deviceIcons.desktop, color: '#d97706' },
+  laptop: { label: '笔记本', icon: deviceIcons.laptop, color: '#db2777' },
 }
 const nodeTypes = {
   internet: markRaw(InternetNode),
@@ -49,11 +53,14 @@ const filter = ref('all')
 const showAddDevice = ref(false)
 const showAddService = ref(false)
 const showPassword = ref({})
+const showUserMenu = ref(false)
 const saveState = ref('正在连接…')
 const editMode = ref(false)
 const loadingTopology = ref(true)
 const topologyError = ref('')
+const topologyVersion = ref(0)
 let saveTimer
+let saveSequence = Promise.resolve()
 let topologyReady = false
 provide('netdesk-edit-mode', editMode)
 provide('netdesk-device-filter', filter)
@@ -88,22 +95,36 @@ function serializeTopology() {
 async function persist(force = false) {
   if ((!editMode.value && !force) || !topologyReady) return
   window.clearTimeout(saveTimer)
-  saveState.value = '保存中…'
-  try {
-    await http.put('/topology', serializeTopology())
-    saveState.value = '已保存到服务器'
-    topologyError.value = ''
-  } catch (error) {
-    saveState.value = '保存失败'
-    topologyError.value = error.response?.data?.message || '无法连接服务器，修改尚未保存'
-  }
+  // Queue writes so a slow earlier autosave cannot conflict with the user's
+  // own later autosave before its new version has reached the browser.
+  saveSequence = saveSequence.then(async () => {
+    saveState.value = '保存中…'
+    try {
+      const result = await http.put('/topology', { topology: serializeTopology(), version: topologyVersion.value })
+      topologyVersion.value = result.data.version
+      saveState.value = '已保存到服务器'
+      topologyError.value = ''
+    } catch (error) {
+      if (error.response?.status === 409) {
+        saveState.value = '保存冲突'
+        topologyError.value = '拓扑已被其他用户修改，请刷新后再编辑。'
+        editMode.value = false
+      } else {
+        saveState.value = '保存失败'
+        topologyError.value = error.response?.data?.message || '无法连接服务器，修改尚未保存'
+      }
+    }
+  })
+  await saveSequence
 }
 
 onMounted(async () => {
   try {
     const result = await http.get('/topology')
-    nodes.value = (result.data.nodes || []).map((node) => ({ ...node, type: node.data?.type || node.type || 'server', data: normalizeDeviceData(node.data) }))
-    edges.value = (result.data.edges || []).map((edge) => normalizeEdge(edge))
+    const { topology, version } = result.data
+    topologyVersion.value = version
+    nodes.value = (topology.nodes || []).map((node) => ({ ...node, type: node.data?.type || node.type || 'server', data: normalizeDeviceData(node.data) }))
+    edges.value = (topology.edges || []).map((edge) => normalizeEdge(edge))
     topologyReady = true
     saveState.value = '已连接服务器'
     await nextTick()
@@ -238,6 +259,34 @@ function normalizeEdge(edge) {
   return { ...defaultEdgeOptions, ...edge, type: edge.type || 'bezier', interactionWidth: 44, data: { ...edge.data, lineStyle }, animated: lineStyle === 'animated', style: lineStyle === 'dashed' ? { strokeDasharray: '8 6' } : {} }
 }
 
+async function autoLayout() {
+  if (!editMode.value || !nodes.value.length) return
+
+  const graph = new dagre.graphlib.Graph()
+  graph.setDefaultEdgeLabel(() => ({}))
+  graph.setGraph({ rankdir: 'TB', nodesep: 54, ranksep: 86, marginx: 30, marginy: 30 })
+
+  nodes.value.forEach((node) => {
+    const width = node.dimensions?.width || 190
+    const height = node.dimensions?.height || 66
+    graph.setNode(node.id, { width, height })
+  })
+  edges.value.forEach((edge) => {
+    if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) graph.setEdge(edge.source, edge.target)
+  })
+
+  dagre.layout(graph)
+  nodes.value = nodes.value.map((node) => {
+    const layout = graph.node(node.id)
+    const width = node.dimensions?.width || 190
+    const height = node.dimensions?.height || 66
+    return { ...node, position: { x: layout.x - width / 2, y: layout.y - height / 2 } }
+  })
+
+  await nextTick()
+  fitView({ padding: .18, duration: 500 })
+}
+
 function updateEdgeStyle() {
   if (!selectedEdge.value) return
   const normalized = normalizeEdge(selectedEdge.value)
@@ -255,6 +304,7 @@ function updateSelectedNodeType() {
 }
 
 async function toggleEditMode() {
+  if (!canEditTopology.value) return
   if (editMode.value) {
     await persist(true)
     if (topologyError.value) return
@@ -267,6 +317,7 @@ async function toggleEditMode() {
 }
 
 async function signOut() {
+  showUserMenu.value = false
   await logout()
   await router.replace('/login')
 }
@@ -275,19 +326,19 @@ async function signOut() {
 <template>
   <main class="workspace">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark">N</span><div><strong>NetDesk</strong><small>办公室网络资产台</small></div></div>
+      <div class="brand"><img class="brand-mark" :src="logoUrl" alt="NetDesk Logo" /><div><strong>NetDesk</strong><small>办公室网络资产台</small></div></div>
       <div class="search-wrap">
         <span>⌕</span><input v-model="search" placeholder="搜索设备、IP、服务或账号…" />
         <kbd>⌘ K</kbd>
         <div v-if="searchResults.length" class="search-panel">
           <button v-for="result in searchResults" :key="result.node.id" @click="selectNode(result.node)">
-            <span class="result-icon" :style="{ color: typeMeta[result.node.data.type].color }">{{ typeMeta[result.node.data.type].icon }}</span>
+            <span class="result-icon"><img :src="typeMeta[result.node.data.type].icon" alt="" /></span>
             <span><strong>{{ result.node.data.name }}</strong><small>{{ result.node.data.ip || '未设置 IP' }}<template v-if="result.services.length"> · {{ result.services.map(s => s.name).join('、') }}</template></small></span>
             <em>查看</em>
           </button>
         </div>
       </div>
-      <div class="top-actions"><span class="mode-badge" :class="{ editing: editMode }">{{ editMode ? '编辑模式' : '查看模式' }}</span><span class="save-state"><i></i>{{ saveState }}</span><button class="edit-toggle" :class="{ editing: editMode }" @click="toggleEditMode">{{ editMode ? '✓ 完成编辑' : '✎ 启用编辑' }}</button><button class="avatar" :title="`${currentUser?.displayName} · 点击退出`" @click="signOut">{{ currentUser?.displayName?.slice(0, 2) || '我' }}</button></div>
+      <div class="top-actions"><span class="mode-badge" :class="{ editing: editMode }">{{ editMode ? '编辑模式' : '查看模式' }}</span><span class="save-state"><i></i>{{ saveState }}</span><button v-if="canEditTopology" class="edit-toggle" :class="{ editing: editMode }" @click="toggleEditMode">{{ editMode ? '✓ 完成编辑' : '✎ 启用编辑' }}</button><div class="account-menu-wrap"><button class="avatar" :title="currentUser?.displayName" @click="showUserMenu = !showUserMenu">{{ currentUser?.displayName?.slice(0, 2) || '我' }}</button><div v-if="showUserMenu" class="account-menu"><div><strong>{{ currentUser?.displayName }}</strong><small>{{ currentUser?.username }}</small></div><button v-if="canManageSystem" @click="router.push('/settings')">⚙ 系统设置</button><button class="logout-action" @click="signOut">退出登录</button></div></div></div>
     </header>
 
     <aside class="sidebar">
@@ -295,25 +346,26 @@ async function signOut() {
       <p class="helper">{{ editMode ? '拖到画布中添加设备' : '启用编辑后可添加设备' }}</p>
       <div class="device-palette" :class="{ disabled: !editMode }">
         <button v-for="(meta, type) in typeMeta" :key="type" :draggable="editMode" @dragstart="onDragStart($event, type)">
-          <span :style="{ color: meta.color, background: `${meta.color}13` }">{{ meta.icon }}</span>{{ meta.label }}<i>⠿</i>
+          <span :style="{ background: `${meta.color}13` }"><img :src="meta.icon" alt="" /></span>{{ meta.label }}<i>⠿</i>
         </button>
       </div>
       <div class="sidebar-section">
         <span>视图</span>
-        <button :class="{ active: filter === 'all' }" @click="filter = 'all'"><i>◫</i>全部设备<em>{{ nodes.length }}</em></button>
-        <button :class="{ active: filter === 'server' }" @click="filter = 'server'"><i>▣</i>服务器</button>
-        <button :class="{ active: filter === 'virtualMachine' }" @click="filter = 'virtualMachine'"><i>⬡</i>虚拟机</button>
-        <button :class="{ active: filter === 'computer' }" @click="filter = 'computer'"><i>▤</i>办公电脑</button>
-        <button :class="{ active: filter === 'router' }" @click="filter = 'router'"><i>⌁</i>网络设备</button>
+        <button :class="{ active: filter === 'all' }" @click="filter = 'all'"><i><img :src="allDevicesIcon" alt="" /></i>全部设备<em>{{ nodes.length }}</em></button>
+        <button v-for="(meta, type) in typeMeta" :key="type" :class="{ active: filter === type }" @click="filter = type">
+          <i><img :src="meta.icon" alt="" /></i>{{ meta.label }}<em>{{ nodes.filter(node => node.data.type === type).length }}</em>
+        </button>
       </div>
       <div class="network-summary"><span>网络概览</span><div><strong>{{ onlineCount }}/{{ nodes.length }}</strong><small>设备在线</small></div><div class="meter"><i :style="{ width: `${nodes.length ? onlineCount / nodes.length * 100 : 0}%` }"></i></div><p><span><i class="dot green"></i>在线 {{ onlineCount }}</span><span><i class="dot gray"></i>离线 {{ nodes.length - onlineCount }}</span></p></div>
     </aside>
 
     <section class="canvas" :class="{ editing: editMode }" @dragover.prevent @drop="onDrop">
-      <div class="canvas-toolbar"><div><button class="active">拓扑视图</button><button>列表视图</button></div><button @click="fitView({ padding: .18, duration: 400 })">⊙ 适应画布</button></div>
+      <div class="canvas-toolbar"><div><button class="active">拓扑视图</button><button>列表视图</button></div></div>
       <VueFlow v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :default-edge-options="defaultEdgeOptions" fit-view-on-init :min-zoom="0.3" :max-zoom="1.8" :nodes-draggable="editMode" :nodes-connectable="editMode" :edges-updatable="editMode" :delete-key-code="editMode ? ['Backspace', 'Delete'] : null" :connection-radius="64" :connect-on-click="true" @connect="onConnect" @edge-update="onEdgeUpdate" @node-click="({ node }) => selectNode(node)" @edge-click="({ edge }) => selectEdge(edge)" @pane-click="selectedId = selectedEdgeId = null" class="vue-flow">
         <Background pattern-color="#d8dee8" :gap="22" :size="1" />
-        <Controls position="bottom-left" />
+        <Controls position="bottom-left" :show-interactive="false" :fit-view-params="{ padding: .18, duration: 400 }">
+          <ControlButton class="auto-layout-control" :disabled="!editMode" title="自动整理" @click="autoLayout"><img :src="autoLayoutIcon" alt="" /></ControlButton>
+        </Controls>
         <MiniMap position="bottom-right" :node-color="node => typeMeta[node.data.type]?.color || '#94a3b8'" pannable zoomable />
       </VueFlow>
       <div v-if="loadingTopology" class="topology-state"><span class="state-spinner"></span><strong>正在从服务器加载拓扑</strong></div>
@@ -323,7 +375,7 @@ async function signOut() {
     </section>
 
     <aside v-if="selectedNode" class="detail-panel">
-      <div class="detail-head"><div class="large-icon" :style="{ color: typeMeta[selectedNode.data.type].color, background: `${typeMeta[selectedNode.data.type].color}13` }">{{ typeMeta[selectedNode.data.type].icon }}</div><div><small>{{ typeMeta[selectedNode.data.type].label }}</small><h2>{{ selectedNode.data.name }}</h2></div><button @click="selectedId = null">×</button></div>
+      <div class="detail-head"><div class="large-icon" :style="{ background: `${typeMeta[selectedNode.data.type].color}13` }"><img :src="typeMeta[selectedNode.data.type].icon" alt="" /></div><div><small>{{ typeMeta[selectedNode.data.type].label }}</small><h2>{{ selectedNode.data.name }}</h2></div><button @click="selectedId = null">×</button></div>
       <div class="status-line"><span><i class="dot" :class="selectedNode.data.status === 'online' ? 'green' : selectedNode.data.status === 'warning' ? 'amber' : 'gray'"></i>{{ selectedNode.data.status === 'online' ? '设备在线' : selectedNode.data.status === 'warning' ? '设备需关注' : '设备离线' }}</span><select v-model="selectedNode.data.status" :disabled="!editMode"><option value="online">在线</option><option value="warning">需关注</option><option value="offline">离线</option></select></div>
       <section class="detail-section"><div class="section-title"><span>设备信息</span><em class="readonly-label">{{ editMode ? '可编辑' : '只读' }}</em></div><label>设备名称<input v-model="selectedNode.data.name" :disabled="!editMode" /></label><label>设备类型<select v-model="selectedNode.data.type" :disabled="!editMode" @change="updateSelectedNodeType"><option v-for="(meta, type) in typeMeta" :key="type" :value="type">{{ meta.label }}</option></select></label><div class="field-row"><label>网络配置<select v-model="selectedNode.data.networkMode" :disabled="!editMode"><option value="dhcp">DHCP 自动获取</option><option value="static">固定 IP</option></select></label><label>{{ selectedNode.data.networkMode === 'static' ? '固定 IP 地址' : '当前 IP（可选）' }}<input v-model="selectedNode.data.ip" :disabled="!editMode" placeholder="192.168.1.10" /></label></div><label v-if="systemDeviceTypes.includes(selectedNode.data.type) && selectedNode.data.type !== 'virtualMachine'">操作系统<input v-model="selectedNode.data.os" :disabled="!editMode" placeholder="例如：Windows 11 / Ubuntu 24.04" /></label><label>备注<textarea v-model="selectedNode.data.note" :disabled="!editMode" rows="2" placeholder="位置、系统、用途…"></textarea></label></section>
       <section v-if="selectedNode.data.type === 'virtualMachine'" class="detail-section vm-section"><div class="section-title"><span>虚拟机配置</span><em class="readonly-label">{{ editMode ? '可编辑' : '只读' }}</em></div><div class="field-row"><label>宿主机<input v-model="selectedNode.data.hostName" :disabled="!editMode" placeholder="例如：PVE-01" /></label><label>虚拟化平台<select v-model="selectedNode.data.platform" :disabled="!editMode"><option value="">未设置</option><option>Proxmox VE</option><option>VMware ESXi</option><option>Hyper-V</option><option>KVM</option><option>VirtualBox</option><option>其他</option></select></label></div><label>操作系统<input v-model="selectedNode.data.os" :disabled="!editMode" placeholder="例如：Ubuntu Server 24.04" /></label><div class="vm-resource-grid"><label>CPU<input v-model="selectedNode.data.cpu" :disabled="!editMode" placeholder="4 vCPU" /></label><label>内存<input v-model="selectedNode.data.memory" :disabled="!editMode" placeholder="8 GB" /></label><label>磁盘<input v-model="selectedNode.data.disk" :disabled="!editMode" placeholder="120 GB" /></label></div></section>

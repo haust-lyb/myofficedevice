@@ -2,6 +2,8 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '../stores/auth'
+import logoUrl from '../assets/logo.svg'
+import { deviceIcons } from '../assets/deviceIcons'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,9 +30,9 @@ async function submit() {
 <template>
   <main class="login-page">
     <section class="login-intro">
-      <div class="login-brand"><span class="brand-mark">N</span><div><strong>NetDesk</strong><small>办公室网络资产台</small></div></div>
+      <div class="login-brand"><img class="brand-mark" :src="logoUrl" alt="NetDesk Logo" /><div><strong>NetDesk</strong><small>办公室网络资产台</small></div></div>
       <div class="intro-copy"><span class="eyebrow">NETWORK ASSET WORKSPACE</span><h1>每一台设备，<br />每一个服务入口，<br /><em>都清晰可见。</em></h1><p>用一张实时拓扑图管理办公室网络资产，快速找到服务器、管理后台与部署服务。</p></div>
-      <div class="login-topology" aria-hidden="true"><i class="pulse p1"></i><i class="pulse p2"></i><i class="pulse p3"></i><span class="line l1"></span><span class="line l2"></span><span class="line l3"></span><b class="node n1">◎</b><b class="node n2">⌁</b><b class="node n3">⇄</b><b class="node n4">▣</b><b class="node n5">▤</b></div>
+      <div class="login-topology" aria-hidden="true"><i class="pulse p1"></i><i class="pulse p2"></i><i class="pulse p3"></i><span class="line l1"></span><span class="line l2"></span><span class="line l3"></span><b class="node n1"><img :src="deviceIcons.internet" alt="" /></b><b class="node n2"><img :src="deviceIcons.router" alt="" /></b><b class="node n3"><img :src="deviceIcons.switch" alt="" /></b><b class="node n4"><img :src="deviceIcons.server" alt="" /></b><b class="node n5"><img :src="deviceIcons.desktop" alt="" /></b></div>
       <small class="login-foot">PRIVATE · SECURE · SELF-HOSTED</small>
     </section>
     <section class="login-form-wrap">

@@ -9,6 +9,8 @@ const state = reactive({
 
 export const currentUser = computed(() => state.user)
 export const isAuthenticated = computed(() => Boolean(sessionStorage.getItem(TOKEN_KEY) && state.user))
+export const canEditTopology = computed(() => Boolean(state.user?.canEditTopology))
+export const canManageSystem = computed(() => Boolean(state.user?.canManageSystem))
 
 export async function login(username, password) {
   const result = await http.post('/auth/login', { username, password })

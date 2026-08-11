@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { isAuthenticated, restoreSession } from '../stores/auth'
+import { currentUser, restoreSession } from '../stores/auth'
 const routes = [
   {
     path: '/',
@@ -16,6 +16,12 @@ const routes = [
     name: 'flow',
     component: () => import('../views/FlowView.vue'),
   },
+  {
+    path: '/settings',
+    name: 'settings',
+    component: () => import('../views/SettingsView.vue'),
+    meta: { superAdmin: true },
+  },
 ]
 
 const router = createRouter({
@@ -24,11 +30,15 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  const authenticated = await restoreSession()
   if (to.meta.public) {
-    if (to.name === 'login' && (isAuthenticated.value || await restoreSession())) return '/flow'
+    if (to.name === 'login' && authenticated) return '/flow'
     return true
   }
-  if (isAuthenticated.value || await restoreSession()) return true
+  if (authenticated) {
+    if (to.meta.superAdmin && !currentUser.value?.canManageSystem) return '/flow'
+    return true
+  }
   return { name: 'login', query: { redirect: to.fullPath } }
 })
 

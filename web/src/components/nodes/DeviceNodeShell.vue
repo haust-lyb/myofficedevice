@@ -1,11 +1,11 @@
 <script setup>
 import { computed, inject } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { deviceIcons } from '../../assets/deviceIcons'
 
 const props = defineProps({
   id: { type: String, required: true },
   data: { type: Object, required: true },
-  icon: { type: String, required: true },
   color: { type: String, required: true },
 })
 
@@ -14,7 +14,7 @@ const activeFilter = inject('netdesk-device-filter')
 const selectedId = inject('netdesk-selected-id')
 const nodeClasses = computed(() => {
   const filter = activeFilter?.value || 'all'
-  const matches = filter === 'all' || props.data.type === filter || (filter === 'computer' && ['desktop', 'laptop'].includes(props.data.type))
+  const matches = filter === 'all' || props.data.type === filter
   return { dimmed: !matches, selected: selectedId?.value === props.id }
 })
 </script>
@@ -22,7 +22,7 @@ const nodeClasses = computed(() => {
 <template>
   <div class="device-node" :class="nodeClasses">
     <Handle v-if="editMode" id="input" class="netdesk-handle" type="target" :position="Position.Top" :connectable="true" title="拖到附近即可吸附完成连接" />
-    <div class="device-icon" :style="{ color, background: `${color}13` }">{{ icon }}</div>
+    <div class="device-icon" :style="{ background: `${color}13` }"><img :src="deviceIcons[data.type]" :alt="`${data.name}图标`" /></div>
     <div class="device-info">
       <strong>{{ data.name }}</strong>
       <span><em v-if="data.networkMode === 'dhcp'">DHCP</em>{{ data.ip || (data.networkMode === 'dhcp' ? '自动获取 IP' : 'IP 未设置') }}</span>

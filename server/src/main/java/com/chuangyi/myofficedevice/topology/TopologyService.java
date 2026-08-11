@@ -1,5 +1,6 @@
 package com.chuangyi.myofficedevice.topology;
 
+import com.chuangyi.myofficedevice.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -23,21 +24,40 @@ public class TopologyService {
     }
 
     @Transactional(readOnly = true)
-    public JsonNode get() {
+    public TopologyResponse get() {
         return repository.findById(DOCUMENT_ID)
-                .map(document -> parse(crypto.decrypt(document.getEncryptedPayload())))
-                .orElseGet(this::emptyTopology);
+                .map(document -> new TopologyResponse(
+                        parse(crypto.decrypt(document.getEncryptedPayload())),
+                        versionOf(document)))
+                .orElseGet(() -> new TopologyResponse(emptyTopology(), 0));
     }
 
     @Transactional
-    public SavedTopology save(JsonNode topology) {
+    public SavedTopology save(JsonNode topology, Long expectedVersion) {
         validate(topology);
-        TopologyDocument document = repository.findById(DOCUMENT_ID).orElseGet(TopologyDocument::new);
-        document.setId(DOCUMENT_ID);
-        document.setEncryptedPayload(crypto.encrypt(topology.toString()));
-        document.setUpdatedAt(LocalDateTime.now());
-        repository.save(document);
-        return new SavedTopology(document.getUpdatedAt());
+        if (expectedVersion == null || expectedVersion < 0) {
+            throw new IllegalArgumentException("提交拓扑时必须提供有效版本号");
+        }
+
+        LocalDateTime updatedAt = LocalDateTime.now();
+        String encryptedPayload = crypto.encrypt(topology.toString());
+        TopologyDocument document = repository.findById(DOCUMENT_ID).orElse(null);
+
+        if (document == null) {
+            if (expectedVersion != 0) throw conflict();
+            document = new TopologyDocument();
+            document.setId(DOCUMENT_ID);
+            document.setEncryptedPayload(encryptedPayload);
+            document.setUpdatedAt(updatedAt);
+            document.setVersion(1L);
+            repository.save(document);
+            return new SavedTopology(updatedAt, 1);
+        }
+
+        if (repository.updateIfVersionMatches(DOCUMENT_ID, expectedVersion, encryptedPayload, updatedAt) != 1) {
+            throw conflict();
+        }
+        return new SavedTopology(updatedAt, expectedVersion + 1);
     }
 
     private void validate(JsonNode topology) {
@@ -58,5 +78,15 @@ public class TopologyService {
         return result;
     }
 
-    public record SavedTopology(LocalDateTime updatedAt) {}
+    private long versionOf(TopologyDocument document) {
+        // Databases created before this field was introduced may contain NULL.
+        return document.getVersion() == null ? 0 : document.getVersion();
+    }
+
+    private BusinessException conflict() {
+        return new BusinessException(409, "拓扑已被其他用户修改，请刷新后再编辑");
+    }
+
+    public record TopologyResponse(JsonNode topology, long version) {}
+    public record SavedTopology(LocalDateTime updatedAt, long version) {}
 }

@@ -3,6 +3,7 @@ package com.chuangyi.myofficedevice.auth;
 import com.chuangyi.myofficedevice.exception.BusinessException;
 import com.chuangyi.myofficedevice.user.UserAccount;
 import com.chuangyi.myofficedevice.user.UserAccountRepository;
+import com.chuangyi.myofficedevice.user.UserRole;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -57,10 +58,13 @@ public class AuthService {
     }
 
     private CurrentUser toCurrentUser(UserAccount user) {
-        return new CurrentUser(user.getId(), user.getUsername(), user.getDisplayName());
+        UserRole role = user.getRole();
+        return new CurrentUser(user.getId(), user.getUsername(), user.getDisplayName(), role,
+                role.canEditTopology(), role.canManageSystem());
     }
 
     private record Session(Long userId, Instant expiresAt) {}
-    public record CurrentUser(Long id, String username, String displayName) {}
+    public record CurrentUser(Long id, String username, String displayName, UserRole role,
+                              boolean canEditTopology, boolean canManageSystem) {}
     public record LoginResult(String token, Instant expiresAt, CurrentUser user) {}
 }

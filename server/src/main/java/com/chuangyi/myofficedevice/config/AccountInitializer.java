@@ -2,6 +2,7 @@ package com.chuangyi.myofficedevice.config;
 
 import com.chuangyi.myofficedevice.user.UserAccount;
 import com.chuangyi.myofficedevice.user.UserAccountRepository;
+import com.chuangyi.myofficedevice.user.UserRole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,12 +38,22 @@ public class AccountInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (userAccountRepository.findByUsername(adminUsername).isPresent()) return;
-        UserAccount admin = new UserAccount();
-        admin.setUsername(adminUsername);
-        admin.setDisplayName(adminDisplayName);
-        admin.setPasswordHash(passwordEncoder.encode(adminPassword));
-        userAccountRepository.save(admin);
-        log.warn("Initialized NetDesk administrator account '{}'. Change NETDESK_ADMIN_PASSWORD before production use.", adminUsername);
+        UserAccount admin = userAccountRepository.findByUsername(adminUsername).orElse(null);
+        if (admin != null) {
+            if (admin.getRole() != UserRole.SUPER_ADMIN) {
+                admin.setRole(UserRole.SUPER_ADMIN);
+                admin.setEnabled(true);
+                userAccountRepository.save(admin);
+                log.info("Upgraded initialized account '{}' to super administrator.", adminUsername);
+            }
+            return;
+        }
+        UserAccount initialAdmin = new UserAccount();
+        initialAdmin.setUsername(adminUsername);
+        initialAdmin.setDisplayName(adminDisplayName);
+        initialAdmin.setPasswordHash(passwordEncoder.encode(adminPassword));
+        initialAdmin.setRole(UserRole.SUPER_ADMIN);
+        userAccountRepository.save(initialAdmin);
+        log.warn("Initialized NetDesk super administrator account '{}'. Change NETDESK_ADMIN_PASSWORD before production use.", adminUsername);
     }
 }
