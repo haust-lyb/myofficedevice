@@ -1,77 +1,130 @@
-# OfficeMesh · My Office Device
+# OfficeMesh
 
-[中文](#中文说明) | [English](#english)
+> 面向办公室、小型团队与实验室的自托管网络资产台。
 
-OfficeMesh is a self-hosted workspace for documenting office network assets, topology, and service access information.
+OfficeMesh 用一张可编辑的拓扑图，集中管理网络设备、服务器、虚拟机、终端与 Web 服务入口。设备信息、访问地址和服务凭据保存在自己的服务器上，适合用于记录和交接日常运维环境。
 
----
+## 功能一览
 
-## 中文说明
+- **可视化拓扑**：拖放公网、路由器、交换机、服务器、虚拟机、台式机和笔记本；支持连线、删除、缩放、小地图与自动整理布局。
+- **设备档案**：记录设备名称、状态、DHCP / 固定 IP、操作系统、备注；虚拟机还可记录宿主机、虚拟化平台、CPU、内存和磁盘。
+- **服务入口**：为每台设备维护 Web 服务地址、分类、账号和密码；支持打开链接、显示或复制凭据。
+- **检索与概览**：按设备类型筛选，搜索设备名称、IP、备注、操作系统、服务名和账号，并显示在线设备统计。
+- **编辑保护**：浏览与编辑模式分离；编辑时自动保存。多人同时修改同一拓扑时会检测版本冲突，避免静默覆盖。
+- **用户与权限**：超级管理员可管理账号、查看登录记录和导入导出数据；管理员可编辑拓扑；普通用户仅可查看。
+- **安全存储**：管理员密码使用 BCrypt 哈希；拓扑、服务地址及凭据使用 AES-GCM 加密后保存至 SQLite。
+- **备份恢复**：超级管理员可导出完整 JSON 备份，也可导入 OfficeMesh 备份或包含 `nodes`、`edges` 的拓扑 JSON。
+- **登录防护**：登录会记录结果、来源 IP 和 User-Agent；密码连续错误 5 次会锁定账号 10 分钟。
 
-### 项目简介
+## 快速开始
 
-OfficeMesh（My Office Device）是一个轻量级、自托管的办公室网络资产管理工具。它通过可视化拓扑图集中记录网络设备、服务器、虚拟机、终端设备及其 Web 服务入口，方便团队快速了解网络结构并查找运维信息。
+推荐使用 Docker Compose 部署。需要 Docker Engine 与 Docker Compose 插件。
 
-### 主要功能
+```bash
+git clone <仓库地址>
+cd myofficedevice
+cp .env.example .env
+```
 
-- 可视化编辑网络拓扑，支持拖拽设备、连接节点和调整布局
-- 支持公网、路由器、交换机、服务器、虚拟机、台式机和笔记本等设备类型
-- 记录设备名称、在线状态、IP、网络配置、操作系统和备注
-- 记录虚拟机宿主机、虚拟化平台、CPU、内存和磁盘信息
-- 为设备维护 Web 服务地址、分类、账号和密码
-- 按设备类型筛选，并搜索设备、IP、服务或账号
-- 查看模式与编辑模式分离，编辑内容自动保存
-- 管理员登录鉴权，会话默认有效期为 12 小时
-- 拓扑及服务凭据使用 AES-GCM 加密后存入 SQLite
-- 前后端一体化 Docker 镜像，数据卷持久化
+编辑 `.env`，至少替换以下两项为安全且长期保存的值：
 
-### 技术栈
+```dotenv
+NETDESK_DATA_SECRET=请填写一段长随机密钥
+NETDESK_ADMIN_PASSWORD=请填写高强度管理员密码
+```
 
-- 前端：Vue 3、Vite、Vue Router、Vue Flow、Axios
-- 后端：Java 17、Spring Boot 3、Spring Data JPA
-- 数据库：SQLite
-- 部署：Docker、Docker Compose
-
-### 使用 Docker Compose（推荐）
-
-1. 构建本地镜像：
+若使用本地源码构建镜像：
 
 ```bash
 docker build -t myofficedevice:local .
 ```
 
-2. 在项目根目录创建 `.env`：
+并在 `.env` 中设置：
 
 ```dotenv
 NETDESK_IMAGE=myofficedevice:local
-NETDESK_PORT=8765
-NETDESK_DATA_SECRET=请替换为一段足够长且随机的密钥
-NETDESK_ADMIN_USERNAME=admin
-NETDESK_ADMIN_PASSWORD=请替换为高强度密码
-NETDESK_ADMIN_DISPLAY_NAME=管理员
 ```
 
-3. 启动服务：
+启动服务：
 
 ```bash
 docker compose up -d
 ```
 
-4. 浏览器访问 [http://localhost:8765/mod/](http://localhost:8765/mod/)，使用 `.env` 中配置的管理员账号登录。
+打开 [http://localhost:8765/mod/](http://localhost:8765/mod/)，使用 `.env` 中的管理员账号登录。默认用户名是 `admin`。
 
-停止服务：
+常用运维命令：
 
 ```bash
+# 查看运行状态与日志
+docker compose ps
+docker compose logs -f myofficedevice
+
+# 更新镜像后重新创建服务
+docker compose pull
+docker compose up -d
+
+# 停止服务（不会删除数据）
 docker compose down
 ```
 
-SQLite 数据保存在 Compose 管理的 `myofficedevice-data` 数据卷中。普通的 `docker compose down` 不会删除该数据卷。
+## 首次使用
 
-> 请妥善保存 `NETDESK_DATA_SECRET`。已有数据必须使用原密钥解密；丢失或更换密钥会导致原拓扑数据无法读取。
+1. 以初始管理员登录，进入拓扑页面。
+2. 打开左侧的“启用编辑”，将设备拖入画布或通过“添加新设备”创建资产。
+3. 连接设备并按需点击“自动整理”。
+4. 选中设备，填写网络与系统信息，并添加服务入口及凭据。
+5. 关闭编辑模式前会完成一次保存；状态栏会显示保存结果。
+6. 在账户菜单进入系统设置，可创建用户、查看登录记录或导出拓扑备份。
 
-### 本地开发
+## 角色权限
 
-环境要求：JDK 17、Maven 3.9+、Node.js 22+、npm。
+| 角色 | 浏览拓扑与服务 | 编辑拓扑 | 用户管理、登录记录、备份导入导出 |
+| --- | :---: | :---: | :---: |
+| `USER` 普通用户 | ✓ | — | — |
+| `ADMIN` 管理员 | ✓ | ✓ | — |
+| `SUPER_ADMIN` 超级管理员 | ✓ | ✓ | ✓ |
+
+首次启动时会创建由 `NETDESK_ADMIN_*` 配置指定的超级管理员。数据库中存在同名账号后，再修改这些环境变量**不会**修改已创建账号；请在系统设置中重置密码或调整账号。
+
+## 配置
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `NETDESK_IMAGE` | `ghcr.io/your-github-name/myofficedevice:latest` | Compose 使用的镜像地址。仅 Compose 使用。 |
+| `NETDESK_PORT` | `8765` | 对外暴露的端口。 |
+| `NETDESK_DATA_DIR` | 当前工作目录 | SQLite 数据库目录；容器内固定为 `/app/data`。 |
+| `NETDESK_DATA_SECRET` | 开发默认值 | AES-GCM 加密密钥。生产环境必须设置为随机密钥并保持不变。 |
+| `NETDESK_ADMIN_USERNAME` | `admin` | 首次启动时创建的超级管理员用户名。 |
+| `NETDESK_ADMIN_PASSWORD` | `admin123` | 首次启动时创建的超级管理员密码。生产环境必须覆盖。 |
+| `NETDESK_ADMIN_DISPLAY_NAME` | `管理员` | 首次启动时创建的超级管理员显示名称。 |
+| `VITE_API_TARGET` | `http://localhost:8765` | 前端开发服务器的 API 代理地址。仅本地开发使用。 |
+
+可用以下命令生成密钥：
+
+```bash
+openssl rand -hex 32
+```
+
+> **请妥善保存 `NETDESK_DATA_SECRET`。** 数据库中的拓扑内容需要原密钥解密；丢失或更换密钥后，已有内容将无法读取。导出的 JSON 备份含有服务凭据明文，也应按敏感文件保存。
+
+## 数据与备份
+
+Docker Compose 将 SQLite 数据保存在命名卷 `myofficedevice-data`。`docker compose down` 不会删除数据；请勿执行 `docker compose down -v`，除非确认要删除全部数据库。
+
+建议的备份方式：
+
+1. 以超级管理员身份进入“系统设置 → 数据备份”。
+2. 导出当前拓扑 JSON 并保存在受保护的位置。
+3. 同时安全保存当前 `NETDESK_DATA_SECRET` 与 `.env` 配置。
+
+恢复时，从同一页面选择 JSON 文件导入。导入会覆盖服务器上的当前拓扑，建议先导出一份现有数据。
+
+更多镜像发布、服务器部署和卷备份说明见 [DEPLOYMENT.md](DEPLOYMENT.md)。
+
+## 本地开发
+
+环境要求：JDK 17、Maven 3.9+、Node.js 22+ 与 npm。
 
 启动后端：
 
@@ -82,194 +135,43 @@ NETDESK_ADMIN_PASSWORD=admin123 \
 mvn spring-boot:run
 ```
 
-后端默认运行在 `http://localhost:8765/mod`。
+后端默认地址为 `http://localhost:8765/mod`。
 
-另开一个终端启动前端：
+在另一个终端启动前端：
 
 ```bash
 cd web
-npm ci
+npm install --no-package-lock
 npm run dev
 ```
 
-访问 [http://localhost:3000/mod/](http://localhost:3000/mod/)。Vite 会将 `/mod` 请求代理到本地后端。
+访问 [http://localhost:3000/mod/](http://localhost:3000/mod/)。Vite 会将 `/mod` 请求代理至本地后端。
 
-用于开发的默认用户名是 `admin`。如果未通过环境变量设置密码，后端默认密码为 `admin123`；该默认值仅适合本地开发，生产环境请务必覆盖。
-
-### 构建
-
-单独构建前端：
+构建生产产物：
 
 ```bash
-cd web
-npm ci
-npm run build
+# 前端
+cd web && npm install --no-package-lock && npm run build
+
+# 后端
+cd server && mvn package
 ```
 
-构建后端 JAR：
+Dockerfile 会先构建前端，再将静态文件打包进 Spring Boot 应用，最终生成单一可运行镜像。
 
-```bash
-cd server
-mvn package
-```
+## 技术栈与目录
 
-Dockerfile 会先构建前端，将产物复制到 Spring Boot 的静态资源目录，再生成可直接运行的一体化镜像。
-
-### 配置项
-
-| 环境变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `NETDESK_PORT` | `8765` | Docker Compose 对外暴露的端口 |
-| `NETDESK_DATA_DIR` | 当前工作目录 | SQLite 数据文件目录；容器内固定为 `/app/data` |
-| `NETDESK_DATA_SECRET` | 开发用默认值 | 拓扑数据加密密钥，生产环境必须设置并长期保管 |
-| `NETDESK_ADMIN_USERNAME` | `admin` | 首次启动时创建的管理员用户名 |
-| `NETDESK_ADMIN_PASSWORD` | `admin123` | 首次启动时创建的管理员密码，生产环境必须修改 |
-| `NETDESK_ADMIN_DISPLAY_NAME` | `管理员` | 管理员显示名称 |
-| `VITE_API_TARGET` | `http://localhost:8765` | 前端开发服务器的 API 代理目标 |
-
-管理员账号只会在数据库中不存在同名用户时创建，因此数据库初始化后修改管理员环境变量不会自动更新已有账号。
-
-### 项目结构
+- 前端：Vue 3、Vite、Vue Router、Vue Flow、Dagre、Axios
+- 后端：Java 17、Spring Boot 3、Spring Data JPA、Spring Security Crypto
+- 存储：SQLite
+- 部署：Docker、Docker Compose
 
 ```text
 .
-├── web/          # Vue 3 前端
-├── server/       # Spring Boot 后端
-├── Dockerfile    # 多阶段一体化镜像构建
-└── compose.yml   # Docker Compose 部署配置
-```
-
----
-
-## English
-
-### Overview
-
-OfficeMesh (My Office Device) is a lightweight, self-hosted office network asset manager. It provides a visual topology for documenting network hardware, servers, virtual machines, workstations, and their web service entry points in one place.
-
-### Features
-
-- Visual topology editing with draggable devices, links, and layouts
-- Internet, router, switch, server, virtual machine, desktop, and laptop nodes
-- Device status, IP configuration, operating system, and notes
-- VM host, virtualization platform, CPU, memory, and disk details
-- Web service URLs, categories, usernames, and passwords attached to devices
-- Device filters and search across devices, IPs, services, and accounts
-- Separate view/edit modes with automatic persistence
-- Administrator authentication with 12-hour sessions by default
-- AES-GCM-encrypted topology and credentials stored in SQLite
-- Combined frontend/backend Docker image with persistent storage
-
-### Technology
-
-- Frontend: Vue 3, Vite, Vue Router, Vue Flow, Axios
-- Backend: Java 17, Spring Boot 3, Spring Data JPA
-- Database: SQLite
-- Deployment: Docker and Docker Compose
-
-### Run with Docker Compose (recommended)
-
-1. Build the image locally:
-
-```bash
-docker build -t myofficedevice:local .
-```
-
-2. Create a `.env` file in the project root:
-
-```dotenv
-NETDESK_IMAGE=myofficedevice:local
-NETDESK_PORT=8765
-NETDESK_DATA_SECRET=replace-with-a-long-random-secret
-NETDESK_ADMIN_USERNAME=admin
-NETDESK_ADMIN_PASSWORD=replace-with-a-strong-password
-NETDESK_ADMIN_DISPLAY_NAME=Administrator
-```
-
-3. Start the application:
-
-```bash
-docker compose up -d
-```
-
-4. Open [http://localhost:8765/mod/](http://localhost:8765/mod/) and sign in with the administrator credentials from `.env`.
-
-Stop the application with:
-
-```bash
-docker compose down
-```
-
-SQLite data is persisted in the Compose-managed `myofficedevice-data` volume. A regular `docker compose down` does not remove this volume.
-
-> Keep `NETDESK_DATA_SECRET` safe and stable. Existing data can only be decrypted with the original secret; losing or changing it makes the stored topology unreadable.
-
-### Local development
-
-Requirements: JDK 17, Maven 3.9+, Node.js 22+, and npm.
-
-Start the backend:
-
-```bash
-cd server
-NETDESK_DATA_SECRET=development-secret \
-NETDESK_ADMIN_PASSWORD=admin123 \
-mvn spring-boot:run
-```
-
-The backend runs at `http://localhost:8765/mod` by default.
-
-In another terminal, start the frontend:
-
-```bash
-cd web
-npm ci
-npm run dev
-```
-
-Open [http://localhost:3000/mod/](http://localhost:3000/mod/). Vite proxies `/mod` requests to the local backend.
-
-The development username defaults to `admin`. If no password environment variable is provided, the backend defaults to `admin123`. Never use this default in production.
-
-### Build
-
-Build the frontend:
-
-```bash
-cd web
-npm ci
-npm run build
-```
-
-Build the backend JAR:
-
-```bash
-cd server
-mvn package
-```
-
-The Dockerfile builds the frontend first, copies it into Spring Boot's static resources, and then creates a single runnable image.
-
-### Configuration
-
-| Environment variable | Default | Description |
-| --- | --- | --- |
-| `NETDESK_PORT` | `8765` | Port exposed by Docker Compose |
-| `NETDESK_DATA_DIR` | Current working directory | SQLite data directory; fixed to `/app/data` in the container |
-| `NETDESK_DATA_SECRET` | Development fallback | Topology encryption secret; must be set and retained in production |
-| `NETDESK_ADMIN_USERNAME` | `admin` | Administrator username created on first startup |
-| `NETDESK_ADMIN_PASSWORD` | `admin123` | Administrator password created on first startup; must be changed in production |
-| `NETDESK_ADMIN_DISPLAY_NAME` | `管理员` | Administrator display name |
-| `VITE_API_TARGET` | `http://localhost:8765` | API proxy target used by the frontend dev server |
-
-The administrator is only created when no user with the configured username exists. Changing these environment variables after database initialization does not update an existing account automatically.
-
-### Project structure
-
-```text
-.
-├── web/          # Vue 3 frontend
-├── server/       # Spring Boot backend
-├── Dockerfile    # Multi-stage combined image build
-└── compose.yml   # Docker Compose deployment
+├── web/                 # Vue 前端
+├── server/              # Spring Boot API 与 SQLite 持久化
+├── Dockerfile           # 前后端一体化镜像构建
+├── compose.yml          # Docker Compose 配置
+├── .env.example         # 部署配置模板
+└── DEPLOYMENT.md        # 发布、部署与备份细节
 ```

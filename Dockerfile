@@ -1,7 +1,9 @@
 FROM node:22-alpine AS web-build
 WORKDIR /build/web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
+COPY web/package.json ./
+ARG DEPENDENCY_REFRESH=local
+RUN test -n "$DEPENDENCY_REFRESH"
+RUN npm install --no-package-lock
 COPY web/ ./
 RUN npm run build
 
