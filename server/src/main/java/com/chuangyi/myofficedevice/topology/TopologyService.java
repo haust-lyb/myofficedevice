@@ -60,6 +60,35 @@ public class TopologyService {
         return new SavedTopology(updatedAt, expectedVersion + 1);
     }
 
+    @Transactional(readOnly = true)
+    public ExportedTopology exportTopology() {
+        TopologyResponse current = get();
+        return new ExportedTopology("officemesh-topology", 1, LocalDateTime.now(), current.version(), current.topology());
+    }
+
+    @Transactional
+    public SavedTopology importTopology(JsonNode payload) {
+        if (payload == null || !payload.isObject()) {
+            throw new BusinessException(400, "导入文件不是有效的 JSON 对象");
+        }
+        if (payload.has("format")
+                && !"officemesh-topology".equals(payload.path("format").asText())
+                && !"netdesk-topology".equals(payload.path("format").asText())) {
+            throw new BusinessException(400, "不支持此备份文件格式");
+        }
+        if (payload.path("schemaVersion").asInt(1) > 1) {
+            throw new BusinessException(400, "备份文件版本过新，请升级 OfficeMesh 后再导入");
+        }
+
+        JsonNode topology = payload.has("topology") ? payload.get("topology") : payload;
+        try {
+            validate(topology);
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(400, exception.getMessage());
+        }
+        return save(topology, get().version());
+    }
+
     private void validate(JsonNode topology) {
         if (topology == null || !topology.isObject() || !topology.path("nodes").isArray() || !topology.path("edges").isArray()) {
             throw new IllegalArgumentException("拓扑数据必须包含 nodes 和 edges 数组");
@@ -89,4 +118,6 @@ public class TopologyService {
 
     public record TopologyResponse(JsonNode topology, long version) {}
     public record SavedTopology(LocalDateTime updatedAt, long version) {}
+    public record ExportedTopology(String format, int schemaVersion, LocalDateTime exportedAt,
+                                   long topologyVersion, JsonNode topology) {}
 }

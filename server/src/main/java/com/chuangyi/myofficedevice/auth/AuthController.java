@@ -20,8 +20,10 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Result<AuthService.LoginResult> login(@Valid @RequestBody LoginRequest request) {
-        return Result.ok(authService.login(request.username(), request.password()));
+    public Result<AuthService.LoginResult> login(@Valid @RequestBody LoginRequest request,
+                                                  HttpServletRequest servletRequest) {
+        return Result.ok(authService.login(request.username(), request.password(),
+                new AuthService.LoginContext(clientIp(servletRequest), servletRequest.getHeader("User-Agent"))));
     }
 
     @GetMapping("/me")
@@ -36,4 +38,10 @@ public class AuthController {
     }
 
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
+
+    private String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) return forwarded.split(",", 2)[0].trim();
+        return request.getRemoteAddr();
+    }
 }

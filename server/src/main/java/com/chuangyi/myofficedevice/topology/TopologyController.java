@@ -6,6 +6,7 @@ import com.chuangyi.myofficedevice.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,6 +32,24 @@ public class TopologyController {
         AuthService.CurrentUser user = (AuthService.CurrentUser) servletRequest.getAttribute("currentUser");
         if (user == null || !user.canEditTopology()) throw new BusinessException(403, "当前账号只有查看权限");
         return Result.ok(topologyService.save(request.topology(), request.version()));
+    }
+
+    @GetMapping("/export")
+    public TopologyService.ExportedTopology export(HttpServletRequest servletRequest) {
+        requireSystemAdmin(servletRequest);
+        return topologyService.exportTopology();
+    }
+
+    @PostMapping("/import")
+    public Result<TopologyService.SavedTopology> importTopology(HttpServletRequest servletRequest,
+                                                                 @RequestBody JsonNode payload) {
+        requireSystemAdmin(servletRequest);
+        return Result.ok(topologyService.importTopology(payload));
+    }
+
+    private void requireSystemAdmin(HttpServletRequest request) {
+        AuthService.CurrentUser user = (AuthService.CurrentUser) request.getAttribute("currentUser");
+        if (user == null || !user.canManageSystem()) throw new BusinessException(403, "无权导入或导出拓扑数据");
     }
 
     public record SaveTopologyRequest(JsonNode topology, Long version) {}

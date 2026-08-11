@@ -5,9 +5,8 @@ import { Background } from '@vue-flow/background'
 import { ControlButton, Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import dagre from '@dagrejs/dagre'
-import { useRouter } from 'vue-router'
 import { v4 as uuidv4 } from 'uuid'
-import { canEditTopology, canManageSystem, currentUser, logout } from '../stores/auth'
+import { canEditTopology } from '../stores/auth'
 import http from '../api/http'
 import InternetNode from '../components/nodes/InternetNode.vue'
 import RouterNode from '../components/nodes/RouterNode.vue'
@@ -16,12 +15,12 @@ import ServerNode from '../components/nodes/ServerNode.vue'
 import VirtualMachineNode from '../components/nodes/VirtualMachineNode.vue'
 import DesktopNode from '../components/nodes/DesktopNode.vue'
 import LaptopNode from '../components/nodes/LaptopNode.vue'
+import AccountMenu from '../components/AccountMenu.vue'
 import logoUrl from '../assets/logo.svg'
 import autoLayoutIcon from '../assets/自动整理布局.svg'
 import { allDevicesIcon, deviceIcons } from '../assets/deviceIcons'
 
 const { project, fitView, updateEdge } = useVueFlow()
-const router = useRouter()
 
 const typeMeta = {
   internet: { label: '公网', icon: deviceIcons.internet, color: '#8b5cf6' },
@@ -53,7 +52,6 @@ const filter = ref('all')
 const showAddDevice = ref(false)
 const showAddService = ref(false)
 const showPassword = ref({})
-const showUserMenu = ref(false)
 const saveState = ref('正在连接…')
 const editMode = ref(false)
 const loadingTopology = ref(true)
@@ -71,6 +69,10 @@ const newService = ref({ name: '', url: '', username: '', password: '', category
 const selectedNode = computed(() => nodes.value.find((node) => node.id === selectedId.value))
 const selectedEdge = computed(() => edges.value.find((edge) => edge.id === selectedEdgeId.value))
 const onlineCount = computed(() => nodes.value.filter((node) => node.data.status === 'online').length)
+const saveStateClass = computed(() => ({
+  saving: ['正在连接…', '等待保存…', '保存中…'].includes(saveState.value),
+  error: ['连接失败', '保存失败', '保存冲突'].includes(saveState.value),
+}))
 const searchResults = computed(() => {
   const term = search.value.trim().toLowerCase()
   if (!term) return []
@@ -316,20 +318,14 @@ async function toggleEditMode() {
   showAddService.value = false
 }
 
-async function signOut() {
-  showUserMenu.value = false
-  await logout()
-  await router.replace('/login')
-}
 </script>
 
 <template>
   <main class="workspace">
     <header class="topbar">
-      <div class="brand"><img class="brand-mark" :src="logoUrl" alt="NetDesk Logo" /><div><strong>NetDesk</strong><small>办公室网络资产台</small></div></div>
+      <div class="brand"><img class="brand-mark" :src="logoUrl" alt="OfficeMesh Logo" /><div><strong>OfficeMesh</strong><small>办公室网络资产台</small></div></div>
       <div class="search-wrap">
         <span>⌕</span><input v-model="search" placeholder="搜索设备、IP、服务或账号…" />
-        <kbd>⌘ K</kbd>
         <div v-if="searchResults.length" class="search-panel">
           <button v-for="result in searchResults" :key="result.node.id" @click="selectNode(result.node)">
             <span class="result-icon"><img :src="typeMeta[result.node.data.type].icon" alt="" /></span>
@@ -338,11 +334,16 @@ async function signOut() {
           </button>
         </div>
       </div>
-      <div class="top-actions"><span class="mode-badge" :class="{ editing: editMode }">{{ editMode ? '编辑模式' : '查看模式' }}</span><span class="save-state"><i></i>{{ saveState }}</span><button v-if="canEditTopology" class="edit-toggle" :class="{ editing: editMode }" @click="toggleEditMode">{{ editMode ? '✓ 完成编辑' : '✎ 启用编辑' }}</button><div class="account-menu-wrap"><button class="avatar" :title="currentUser?.displayName" @click="showUserMenu = !showUserMenu">{{ currentUser?.displayName?.slice(0, 2) || '我' }}</button><div v-if="showUserMenu" class="account-menu"><div><strong>{{ currentUser?.displayName }}</strong><small>{{ currentUser?.username }}</small></div><button v-if="canManageSystem" @click="router.push('/settings')">⚙ 系统设置</button><button class="logout-action" @click="signOut">退出登录</button></div></div></div>
+      <div class="top-actions"><AccountMenu /></div>
     </header>
 
     <aside class="sidebar">
-      <div class="sidebar-head"><span>设备库</span><button :disabled="!editMode" @click="showAddDevice = true">＋</button></div>
+      <div class="sidebar-head">
+        <span>设备库</span>
+        <button v-if="canEditTopology" class="edit-mode-switch" :class="{ active: editMode }" role="switch" :aria-checked="editMode" @click="toggleEditMode">
+          <span class="switch-track"><i></i></span><b>{{ editMode ? '编辑中' : '启用编辑' }}</b>
+        </button>
+      </div>
       <p class="helper">{{ editMode ? '拖到画布中添加设备' : '启用编辑后可添加设备' }}</p>
       <div class="device-palette" :class="{ disabled: !editMode }">
         <button v-for="(meta, type) in typeMeta" :key="type" :draggable="editMode" @dragstart="onDragStart($event, type)">
@@ -360,7 +361,9 @@ async function signOut() {
     </aside>
 
     <section class="canvas" :class="{ editing: editMode }" @dragover.prevent @drop="onDrop">
-      <div class="canvas-toolbar"><div><button class="active">拓扑视图</button><button>列表视图</button></div></div>
+      <div class="canvas-status topology-status" :class="[{ editing: editMode }, saveStateClass]" aria-live="polite">
+        <i></i><span><strong>{{ editMode ? '编辑模式' : '查看模式' }}</strong><small>{{ saveState }}</small></span>
+      </div>
       <VueFlow v-model:nodes="nodes" v-model:edges="edges" :node-types="nodeTypes" :default-edge-options="defaultEdgeOptions" fit-view-on-init :min-zoom="0.3" :max-zoom="1.8" :nodes-draggable="editMode" :nodes-connectable="editMode" :edges-updatable="editMode" :delete-key-code="editMode ? ['Backspace', 'Delete'] : null" :connection-radius="64" :connect-on-click="true" @connect="onConnect" @edge-update="onEdgeUpdate" @node-click="({ node }) => selectNode(node)" @edge-click="({ edge }) => selectEdge(edge)" @pane-click="selectedId = selectedEdgeId = null" class="vue-flow">
         <Background pattern-color="#d8dee8" :gap="22" :size="1" />
         <Controls position="bottom-left" :show-interactive="false" :fit-view-params="{ padding: .18, duration: 400 }">
@@ -370,8 +373,11 @@ async function signOut() {
       </VueFlow>
       <div v-if="loadingTopology" class="topology-state"><span class="state-spinner"></span><strong>正在从服务器加载拓扑</strong></div>
       <div v-else-if="topologyError" class="topology-state error"><span>!</span><strong>{{ topologyError }}</strong><button @click="$router.go(0)">重新加载</button></div>
-      <div v-else-if="!nodes.length" class="topology-state empty-state"><span>◇</span><strong>还没有网络设备</strong><p>点击“启用编辑”，从左侧设备库拖入你的第一台设备。</p><button v-if="!editMode" @click="toggleEditMode">启用编辑</button></div>
-      <div class="canvas-hint">{{ editMode ? '从下方大端点拖向目标设备上方，接近目标即可吸附 · 点击连线可设置风格' : '当前为查看模式 · 点击右上角“启用编辑”修改拓扑' }}</div>
+      <div v-else-if="!nodes.length" class="topology-state empty-state"><span>◇</span><strong>还没有网络设备</strong><p>打开设备库顶部的编辑开关，再拖入你的第一台设备。</p><button v-if="!editMode && canEditTopology" @click="toggleEditMode">启用编辑</button></div>
+      <div class="canvas-hint" :class="{ editing: editMode }">
+        <span>{{ editMode ? '✦' : '◉' }}</span>
+        <p><strong>{{ editMode ? '编辑提示' : '当前为查看模式' }}</strong><small>{{ editMode ? '拖动设备调整位置；完成后关闭设备库顶部的编辑开关即可保存。' : canEditTopology ? '打开设备库顶部的编辑开关，即可修改拓扑。' : '你拥有只读权限，可浏览设备与服务信息。' }}</small></p>
+      </div>
     </section>
 
     <aside v-if="selectedNode" class="detail-panel">

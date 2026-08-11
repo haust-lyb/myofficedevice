@@ -55,6 +55,8 @@ public class UserManagementService {
         if (request.password() != null && !request.password().isBlank()) {
             if (request.password().length() < 6) throw new BusinessException(400, "密码至少需要 6 位");
             user.setPasswordHash(passwordEncoder.encode(request.password()));
+            user.setFailedLoginAttempts(0);
+            user.setLockedUntil(null);
         }
         return toView(repository.save(user));
     }
@@ -81,11 +83,12 @@ public class UserManagementService {
 
     private UserView toView(UserAccount user) {
         return new UserView(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(),
-                user.isEnabled(), user.getCreatedAt());
+                user.isEnabled(), user.getFailedLoginAttempts(), user.getLockedUntil(), user.getCreatedAt());
     }
 
     public record CreateUser(String username, String displayName, String password, UserRole role) {}
     public record UpdateUser(String displayName, String password, UserRole role, boolean enabled) {}
     public record UserView(Long id, String username, String displayName, UserRole role, boolean enabled,
+                           int failedLoginAttempts, java.time.LocalDateTime lockedUntil,
                            java.time.LocalDateTime createdAt) {}
 }

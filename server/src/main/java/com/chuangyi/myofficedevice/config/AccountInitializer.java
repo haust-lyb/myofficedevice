@@ -54,6 +54,6 @@ public class AccountInitializer implements ApplicationRunner {
         initialAdmin.setPasswordHash(passwordEncoder.encode(adminPassword));
         initialAdmin.setRole(UserRole.SUPER_ADMIN);
         userAccountRepository.save(initialAdmin);
-        log.warn("Initialized NetDesk super administrator account '{}'. Change NETDESK_ADMIN_PASSWORD before production use.", adminUsername);
+        log.warn("Initialized OfficeMesh super administrator account '{}'. Change NETDESK_ADMIN_PASSWORD before production use.", adminUsername);
     }
 }

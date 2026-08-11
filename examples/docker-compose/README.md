@@ -1,6 +1,6 @@
 # Docker Compose 示例
 
-本示例使用已经构建并发布的 NetDesk 镜像启动服务，SQLite 数据会保存在当前目录下的 `data/` 中。
+本示例使用已经构建并发布的 OfficeMesh 镜像启动服务，SQLite 数据会保存在当前目录下的 `data/` 中。
 
 ## 目录结构
 

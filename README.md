@@ -1,8 +1,8 @@
-# NetDesk · My Office Device
+# OfficeMesh · My Office Device
 
 [中文](#中文说明) | [English](#english)
 
-NetDesk is a self-hosted workspace for documenting office network assets, topology, and service access information.
+OfficeMesh is a self-hosted workspace for documenting office network assets, topology, and service access information.
 
 ---
 
@@ -10,7 +10,7 @@ NetDesk is a self-hosted workspace for documenting office network assets, topolo
 
 ### 项目简介
 
-NetDesk（My Office Device）是一个轻量级、自托管的办公室网络资产管理工具。它通过可视化拓扑图集中记录网络设备、服务器、虚拟机、终端设备及其 Web 服务入口，方便团队快速了解网络结构并查找运维信息。
+OfficeMesh（My Office Device）是一个轻量级、自托管的办公室网络资产管理工具。它通过可视化拓扑图集中记录网络设备、服务器、虚拟机、终端设备及其 Web 服务入口，方便团队快速了解网络结构并查找运维信息。
 
 ### 主要功能
 
@@ -145,7 +145,7 @@ Dockerfile 会先构建前端，将产物复制到 Spring Boot 的静态资源�
 
 ### Overview
 
-NetDesk (My Office Device) is a lightweight, self-hosted office network asset manager. It provides a visual topology for documenting network hardware, servers, virtual machines, workstations, and their web service entry points in one place.
+OfficeMesh (My Office Device) is a lightweight, self-hosted office network asset manager. It provides a visual topology for documenting network hardware, servers, virtual machines, workstations, and their web service entry points in one place.
 
 ### Features
 
