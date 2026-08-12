@@ -24,7 +24,7 @@ OfficeMesh 用一张可编辑的拓扑图，集中管理网络设备、服务器
 推荐使用 Docker Compose 部署。需要 Docker Engine 与 Docker Compose 插件。
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/haust-lyb/myofficedevice.git
 cd myofficedevice
 cp .env.example .env
 ```
