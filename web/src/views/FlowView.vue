@@ -52,6 +52,10 @@ const filter = ref('all')
 const showAddDevice = ref(false)
 const showAddService = ref(false)
 const showPassword = ref({})
+const editingServiceId = ref(null)
+const editingService = ref(null)
+const showDeleteConfirm = ref(false)
+const serviceToDelete = ref(null)
 const saveState = ref('正在连接…')
 const editMode = ref(false)
 const loadingTopology = ref(true)
@@ -64,7 +68,7 @@ provide('netdesk-edit-mode', editMode)
 provide('netdesk-device-filter', filter)
 provide('netdesk-selected-id', selectedId)
 const newDevice = ref(emptyDeviceForm())
-const newService = ref({ name: '', url: '', username: '', password: '', category: '运维入口' })
+const newService = ref({ name: '', url: '', username: '', password: '', category: '运维入口', description: '' })
 
 const selectedNode = computed(() => nodes.value.find((node) => node.id === selectedId.value))
 const selectedEdge = computed(() => edges.value.find((edge) => edge.id === selectedEdgeId.value))
@@ -217,13 +221,48 @@ function createService() {
   if (!selectedNode.value || !newService.value.name.trim()) return
   selectedNode.value.data.services.push({ ...newService.value, id: `service-${Date.now()}` })
   showAddService.value = false
-  newService.value = { name: '', url: '', username: '', password: '', category: '运维入口' }
+  newService.value = { name: '', url: '', username: '', password: '', category: '运维入口', description: '' }
 }
 
-function removeService(id) {
-  if (!editMode.value) return
-  if (!selectedNode.value) return
-  selectedNode.value.data.services = selectedNode.value.data.services.filter((service) => service.id !== id)
+function startEditService(service) {
+  editingServiceId.value = service.id
+  editingService.value = { ...service }
+}
+
+function saveEditService() {
+  if (!selectedNode.value || !editingService.value) return
+  const idx = selectedNode.value.data.services.findIndex((s) => s.id === editingServiceId.value)
+  if (idx !== -1) {
+    selectedNode.value.data.services[idx] = { ...editingService.value }
+  }
+  editingServiceId.value = null
+  editingService.value = null
+}
+
+function cancelEditService() {
+  editingServiceId.value = null
+  editingService.value = null
+}
+
+function copyService(service) {
+  if (!editMode.value || !selectedNode.value) return
+  const newId = `service-${Date.now()}`
+  const copied = { ...service, id: newId, name: `${service.name}（副本）` }
+  selectedNode.value.data.services.push(copied)
+}
+
+function confirmRemoveService(service) {
+  serviceToDelete.value = service
+  showDeleteConfirm.value = true
+}
+
+function removeServiceConfirmed() {
+  if (!editMode.value || !selectedNode.value || !serviceToDelete.value) return
+  selectedNode.value.data.services = selectedNode.value.data.services.filter(
+    (s) => s.id !== serviceToDelete.value.id
+  )
+  showDeleteConfirm.value = false
+  serviceToDelete.value = null
 }
 
 function removeDevice() {
@@ -316,6 +355,10 @@ async function toggleEditMode() {
   }
   showAddDevice.value = false
   showAddService.value = false
+  editingServiceId.value = null
+  editingService.value = null
+  showDeleteConfirm.value = false
+  serviceToDelete.value = null
 }
 
 </script>
@@ -388,10 +431,24 @@ async function toggleEditMode() {
       <section class="detail-section services"><div class="section-title"><span>Web 服务 <em>{{ selectedNode.data.services?.length || 0 }}</em></span><button v-if="editMode" @click="showAddService = true">＋ 添加</button></div>
         <div v-if="!selectedNode.data.services?.length" class="empty"><span>⌁</span><strong>还没有服务</strong><small>添加管理后台、面板或业务系统</small></div>
         <article v-for="service in selectedNode.data.services" :key="service.id" class="service-card">
-          <div class="service-top"><span class="service-favicon">↗</span><div><strong>{{ service.name }}</strong><small>{{ service.category }}</small></div><button v-if="editMode" @click="removeService(service.id)" title="删除">删除</button></div>
-          <button class="service-url" @click="openService(service.url)"><span>{{ service.url }}</span><i>{{ /^https?:/.test(service.url) ? '↗' : '复制' }}</i></button>
-          <div class="credential"><span><small>账号</small><b>{{ service.username || '—' }}</b></span><button @click="copyText(service.username)">复制</button></div>
-          <div class="credential"><span><small>密码</small><b>{{ showPassword[service.id] ? (service.password || '未保存') : '••••••••••' }}</b></span><button @click="showPassword[service.id] = !showPassword[service.id]">{{ showPassword[service.id] ? '隐藏' : '显示' }}</button><button @click="copyText(service.password)">复制</button></div>
+          <template v-if="editingServiceId === service.id">
+            <div class="service-card-edit">
+              <label>服务名称<input v-model="editingService.name" placeholder="例如：Portainer" /></label>
+              <label>访问地址<input v-model="editingService.url" placeholder="https://192.168.10.30:9443" /></label>
+              <div class="field-row"><label>账号<input v-model="editingService.username" autocomplete="off" /></label><label>密码<input v-model="editingService.password" type="password" autocomplete="new-password" /></label></div>
+              <label>分类<select v-model="editingService.category"><option>运维入口</option><option>研发服务</option><option>文件服务</option><option>容器服务</option><option>远程访问</option><option>其他</option></select></label>
+              <label>说明<textarea v-model="editingService.description" rows="2" placeholder="服务用途、注意事项…"></textarea></label>
+            </div>
+            <div class="service-actions"><button class="service-action-save" @click="saveEditService">保存</button><button @click="cancelEditService">取消</button></div>
+          </template>
+          <template v-else>
+            <div class="service-top"><span class="service-favicon">↗</span><div><strong>{{ service.name }}</strong><small>{{ service.category }}</small></div></div>
+            <p v-if="service.description" class="service-desc">{{ service.description }}</p>
+            <button class="service-url" @click="openService(service.url)"><span>{{ service.url }}</span><i>{{ /^https?:/.test(service.url) ? '↗' : '复制' }}</i></button>
+            <div class="credential"><span><small>账号</small><b>{{ service.username || '—' }}</b></span><button @click="copyText(service.username)">复制</button></div>
+            <div class="credential"><span><small>密码</small><b>{{ showPassword[service.id] ? (service.password || '未保存') : '••••••••••' }}</b></span><button @click="showPassword[service.id] = !showPassword[service.id]">{{ showPassword[service.id] ? '隐藏' : '显示' }}</button><button @click="copyText(service.password)">复制</button></div>
+            <div v-if="editMode" class="service-actions"><button @click="startEditService(service)">编辑</button><button @click="copyService(service)">复制</button><button class="service-action-delete" @click="confirmRemoveService(service)">删除</button></div>
+          </template>
         </article>
       </section>
       <div class="security-note">🔒 设备、服务与凭据均保存到服务器，拓扑数据使用 AES-GCM 加密后写入 SQLite。</div>
@@ -408,7 +465,15 @@ async function toggleEditMode() {
 
     <div v-if="showAddDevice || showAddService" class="modal-backdrop" @mousedown.self="showAddDevice = showAddService = false">
       <form v-if="showAddDevice" class="modal" @submit.prevent="createDevice"><div class="modal-title"><div><small>资产管理</small><h2>添加新设备</h2></div><button type="button" @click="showAddDevice = false">×</button></div><label>设备名称<input v-model="newDevice.name" autofocus placeholder="例如：业务系统虚拟机" required /></label><label>设备类型<select v-model="newDevice.type"><option v-for="(meta, type) in typeMeta" :key="type" :value="type">{{ meta.label }}</option></select></label><div class="field-row"><label>网络配置<select v-model="newDevice.networkMode"><option value="dhcp">DHCP 自动获取</option><option value="static">固定 IP</option></select></label><label>{{ newDevice.networkMode === 'static' ? '固定 IP 地址' : '当前 IP（可选）' }}<input v-model="newDevice.ip" placeholder="192.168.10.10" /></label></div><label v-if="systemDeviceTypes.includes(newDevice.type) && newDevice.type !== 'virtualMachine'">操作系统<input v-model="newDevice.os" placeholder="例如：Windows 11 / Ubuntu 24.04" /></label><template v-if="newDevice.type === 'virtualMachine'"><div class="field-row"><label>宿主机<input v-model="newDevice.hostName" placeholder="例如：PVE-01" /></label><label>虚拟化平台<select v-model="newDevice.platform"><option value="">未设置</option><option>Proxmox VE</option><option>VMware ESXi</option><option>Hyper-V</option><option>KVM</option><option>VirtualBox</option><option>其他</option></select></label></div><label>操作系统<input v-model="newDevice.os" placeholder="例如：Ubuntu Server 24.04" /></label><div class="vm-resource-grid"><label>CPU<input v-model="newDevice.cpu" placeholder="4 vCPU" /></label><label>内存<input v-model="newDevice.memory" placeholder="8 GB" /></label><label>磁盘<input v-model="newDevice.disk" placeholder="120 GB" /></label></div></template><label>备注<textarea v-model="newDevice.note" rows="3" placeholder="设备位置、用途或系统信息"></textarea></label><div class="modal-actions"><button type="button" @click="showAddDevice = false">取消</button><button class="primary">添加设备</button></div></form>
-      <form v-else class="modal" @submit.prevent="createService"><div class="modal-title"><div><small>{{ selectedNode?.data.name }}</small><h2>添加服务入口</h2></div><button type="button" @click="showAddService = false">×</button></div><label>服务名称<input v-model="newService.name" autofocus placeholder="例如：Portainer" required /></label><label>访问地址<input v-model="newService.url" placeholder="https://192.168.10.30:9443" /></label><div class="field-row"><label>账号<input v-model="newService.username" autocomplete="off" /></label><label>密码<input v-model="newService.password" type="password" autocomplete="new-password" /></label></div><label>分类<select v-model="newService.category"><option>运维入口</option><option>研发服务</option><option>文件服务</option><option>容器服务</option><option>远程访问</option><option>其他</option></select></label><p class="form-warning">凭据会随拓扑加密保存到服务器，不写入浏览器 LocalStorage。</p><div class="modal-actions"><button type="button" @click="showAddService = false">取消</button><button class="primary">保存服务</button></div></form>
+      <form v-else class="modal" @submit.prevent="createService"><div class="modal-title"><div><small>{{ selectedNode?.data.name }}</small><h2>添加服务入口</h2></div><button type="button" @click="showAddService = false">×</button></div><label>服务名称<input v-model="newService.name" autofocus placeholder="例如：Portainer" required /></label><label>访问地址<input v-model="newService.url" placeholder="https://192.168.10.30:9443" /></label><div class="field-row"><label>账号<input v-model="newService.username" autocomplete="off" /></label><label>密码<input v-model="newService.password" type="password" autocomplete="new-password" /></label></div><label>分类<select v-model="newService.category"><option>运维入口</option><option>研发服务</option><option>文件服务</option><option>容器服务</option><option>远程访问</option><option>其他</option></select></label><label>说明<textarea v-model="newService.description" rows="2" placeholder="服务用途、注意事项…"></textarea></label><p class="form-warning">凭据会随拓扑加密保存到服务器，不写入浏览器 LocalStorage。</p><div class="modal-actions"><button type="button" @click="showAddService = false">取消</button><button class="primary">保存服务</button></div></form>
+    </div>
+
+    <div v-if="showDeleteConfirm" class="modal-backdrop" @mousedown.self="showDeleteConfirm = false">
+      <div class="modal confirm-modal">
+        <div class="modal-title"><div><small>确认删除</small><h2>删除服务</h2></div><button type="button" @click="showDeleteConfirm = false">×</button></div>
+        <p class="confirm-message">确定要删除服务「<strong>{{ serviceToDelete?.name }}</strong>」吗？此操作不可恢复。</p>
+        <div class="modal-actions"><button @click="showDeleteConfirm = false">取消</button><button class="danger" @click="removeServiceConfirmed">确认删除</button></div>
+      </div>
     </div>
   </main>
 </template>
