@@ -4,6 +4,9 @@
 
 OfficeMesh 用一张可编辑的拓扑图，集中管理网络设备、服务器、虚拟机、终端与 Web 服务入口。设备信息、访问地址和服务凭据保存在自己的服务器上，适合用于记录和交接日常运维环境。
 
+<img width="3024" height="1658" alt="image" src="https://github.com/user-attachments/assets/61d73cef-4f61-44ad-ba58-b282bdf1f2d4" />
+
+
 ## 功能一览
 
 - **可视化拓扑**：拖放公网、路由器、交换机、服务器、虚拟机、台式机和笔记本；支持连线、删除、缩放、小地图与自动整理布局。
@@ -21,7 +24,7 @@ OfficeMesh 用一张可编辑的拓扑图，集中管理网络设备、服务器
 推荐使用 Docker Compose 部署。需要 Docker Engine 与 Docker Compose 插件。
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/haust-lyb/myofficedevice.git
 cd myofficedevice
 cp .env.example .env
 ```
